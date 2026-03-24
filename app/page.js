@@ -127,10 +127,10 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="hero-gradient pt-28 pb-20 px-6">
-       /* <div className={`max-w-4xl mx-auto text-center transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+        <div className={`max-w-4xl mx-auto text-center transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="inline-block px-4 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-xs font-mono font-semibold text-teal-600 mb-6">
-            100% LOCAL • NO API KEYS • INSTANT RESULTS
-          </div> */
+            TRY NOW /* 100% LOCAL • NO API KEYS */ • INSTANT RESULTS
+          </div> 
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-gray-900 leading-tight mb-6 tracking-tight">
             From PRD to
             <br />
