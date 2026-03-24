@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
 const FEEDBACK_CATEGORIES = [
   { id: 'accuracy', label: 'Requirement Accuracy', desc: 'Did the PRD Analyst correctly identify requirements?' },
   { id: 'criteria', label: 'Criteria Quality', desc: 'Were acceptance criteria relevant and useful?' },
@@ -9,20 +12,57 @@ const FEEDBACK_CATEGORIES = [
   { id: 'ux', label: 'Overall Experience', desc: 'Was the tool easy to use and understand?' },
 ];
 
+async function submitToSupabase(feedback) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.warn('Supabase not configured, logging feedback locally');
+    console.log('Feedback:', feedback);
+    return { ok: false, fallback: true };
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({
+      rating_accuracy: feedback.ratings.accuracy || null,
+      rating_criteria: feedback.ratings.criteria || null,
+      rating_tests: feedback.ratings.tests || null,
+      rating_verdict: feedback.ratings.verdict || null,
+      rating_ux: feedback.ratings.ux || null,
+      gaps: feedback.gaps || null,
+      comment: feedback.comment || null,
+      prd_length: feedback.prdLength,
+      requirements_found: feedback.requirementsFound,
+      verdict: feedback.verdict,
+      score: feedback.score,
+    }),
+  });
+
+  return { ok: res.ok, status: res.status };
+}
+
 export default function FeedbackWidget({ pipelineResults, prdText }) {
   const [isOpen, setIsOpen] = useState(false);
   const [ratings, setRatings] = useState({});
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
   const [gaps, setGaps] = useState('');
 
   const handleRate = (category, value) => {
     setRatings(prev => ({ ...prev, [category]: value }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError(null);
+
     const feedback = {
-      timestamp: new Date().toISOString(),
       ratings,
       comment,
       gaps,
@@ -32,17 +72,25 @@ export default function FeedbackWidget({ pipelineResults, prdText }) {
       score: pipelineResults?.quality_oracle?.overall_score || 0,
     };
 
-    // Store feedback locally (for demo — replace with API endpoint in production)
     try {
-      const existing = JSON.parse(localStorage.getItem('evalcopilot_feedback') || '[]');
-      existing.push(feedback);
-      localStorage.setItem('evalcopilot_feedback', JSON.stringify(existing));
+      const result = await submitToSupabase(feedback);
+      if (result.ok || result.fallback) {
+        setSubmitted(true);
+      } else {
+        setError('Failed to submit — please try again.');
+      }
     } catch (e) {
-      // localStorage may be unavailable in some contexts — feedback still logged to console
+      console.error('Feedback submission error:', e);
+      setError('Network error — feedback saved locally.');
+      // Fallback to localStorage
+      try {
+        const existing = JSON.parse(localStorage.getItem('evalcopilot_feedback') || '[]');
+        existing.push({ ...feedback, timestamp: new Date().toISOString() });
+        localStorage.setItem('evalcopilot_feedback', JSON.stringify(existing));
+      } catch (le) {}
+      setSubmitted(true);
     }
-
-    console.log('Feedback submitted:', feedback);
-    setSubmitted(true);
+    setSubmitting(false);
   };
 
   if (!isOpen) {
@@ -123,17 +171,23 @@ export default function FeedbackWidget({ pipelineResults, prdText }) {
             className="w-full h-16 rounded-lg border border-gray-200 p-3 text-sm text-gray-700 resize-none focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20"
           />
         </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 rounded-lg text-xs text-red-600 border border-red-100">
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Submit */}
       <div className="px-5 py-4 border-t border-gray-100 shrink-0">
         <button
           onClick={handleSubmit}
-          disabled={Object.keys(ratings).length < 3}
+          disabled={Object.keys(ratings).length < 3 || submitting}
           className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: Object.keys(ratings).length >= 3 ? 'linear-gradient(135deg, #0D9488, #0F766E)' : '#D1D5DB' }}
+          style={{ background: Object.keys(ratings).length >= 3 && !submitting ? 'linear-gradient(135deg, #0D9488, #0F766E)' : '#D1D5DB' }}
         >
-          Submit Feedback ({Object.keys(ratings).length}/5 rated)
+          {submitting ? '⏳ Submitting...' : `Submit Feedback (${Object.keys(ratings).length}/5 rated)`}
         </button>
       </div>
     </div>
